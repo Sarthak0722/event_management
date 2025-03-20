@@ -7,13 +7,27 @@ const TIME_SLOTS = [
   '14:00 - 14:30', '14:30 - 15:00', '15:00 - 15:30', '15:30 - 16:00'
 ];
 
+// Domain abbreviations mapping
+const DOMAIN_CODES = {
+  'Cognitive Systems, Vision and Perception': 'CSVP',
+  'Cyber Security': 'CS',
+  'Advancements in 5g and its applications': '5G',
+  'Advancements in blockchain for secure transactions': 'BC',
+  'Artificial Intelligence and Machine Learning': 'AIML',
+  'Internet of Things and its Applications': 'IOT',
+  'Cloud Computing and Virtualization': 'CC',
+  'Big Data Analytics': 'BDA'
+};
+
+// Generate room names for each domain
+const generateRoomName = (domain, roomNumber) => {
+  const domainCode = DOMAIN_CODES[domain] || domain.split(' ').map(word => word[0]).join('').toUpperCase();
+  return `${domainCode}-R${String(roomNumber).padStart(2, '0')}`;
+};
+
 const generateTeamId = (domain, index) => {
-  // Create an abbreviation from the domain name
-  const abbreviation = domain.split(' ')
-    .map(word => word[0])
-    .join('')
-    .toUpperCase();
-  return `${abbreviation}${String(index + 1).padStart(3, '0')}`;
+  const domainCode = DOMAIN_CODES[domain] || domain.split(' ').map(word => word[0]).join('').toUpperCase();
+  return `${domainCode}${String(index + 1).padStart(3, '0')}`;
 };
 
 const isDuplicatePaper = (paper, existingPapers, newPapers) => {
@@ -177,4 +191,4 @@ const processExcelData = async (filePath) => {
   }
 };
 
-module.exports = { processExcelData }; 
+module.exports = { processExcelData, generateRoomName, TIME_SLOTS }; 

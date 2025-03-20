@@ -1,18 +1,24 @@
 import React from 'react';
 import {
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow,
-  Button,
-  Paper as MuiPaper,
   Typography,
-  Collapse
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Grid,
+  Card,
+  CardContent,
+  Button,
+  useTheme
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import {
+  ExpandMore as ExpandMoreIcon,
+  Room as RoomIcon,
+  Schedule as ScheduleIcon,
+  Person as PersonIcon,
+  Assignment as AssignmentIcon
+} from '@mui/icons-material';
 
 interface Presenter {
   name: string;
@@ -30,66 +36,128 @@ interface Paper {
   synopsis: string;
   day: number | null;
   timeSlot: string | null;
-  room: number | null;
+  room: string | null;
   isSlotAllocated: boolean;
   presentationDate?: Date;
 }
 
 interface RoomProps {
-  roomNumber: number;
+  roomName: string;
   papers: Paper[];
   onViewDetails: (paper: Paper) => void;
   expanded: boolean;
   onToggle: () => void;
 }
 
-const Room: React.FC<RoomProps> = ({ roomNumber, papers, onViewDetails, expanded, onToggle }) => {
+const Room: React.FC<RoomProps> = ({
+  roomName,
+  papers,
+  onViewDetails,
+  expanded,
+  onToggle
+}) => {
+  const theme = useTheme();
+
+  // Sort papers by time slot
+  const sortedPapers = [...papers].sort((a, b) => {
+    if (!a.timeSlot || !b.timeSlot) return 0;
+    return a.timeSlot.localeCompare(b.timeSlot);
+  });
+
   return (
-    <Box sx={{ mb: 2 }}>
-      <Button
-        onClick={onToggle}
-        fullWidth
+    <Accordion 
+      expanded={expanded} 
+      onChange={onToggle}
+      sx={{
+        '&:before': { display: 'none' },
+        boxShadow: 'none',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: '8px !important',
+        overflow: 'hidden',
+        mb: 2
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
         sx={{
-          justifyContent: 'space-between',
-          backgroundColor: '#f0f7ff',
-          color: 'black',
+          backgroundColor: theme.palette.grey[50],
+          borderBottom: expanded ? 1 : 0,
+          borderColor: 'divider',
           '&:hover': {
-            backgroundColor: '#e3f2fd'
-          },
-          mb: 1
+            backgroundColor: theme.palette.grey[100]
+          }
         }}
       >
-        <Typography variant="h6">Room {roomNumber}</Typography>
-        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-      </Button>
-      <Collapse in={expanded}>
-        <TableContainer component={MuiPaper} variant="outlined">
-          <Table>
-            <TableBody>
-              {papers.map((paper) => (
-                <TableRow key={paper._id}>
-                  <TableCell sx={{ width: '150px' }}>{paper.timeSlot}</TableCell>
-                  <TableCell sx={{ width: '100px' }}>{paper.teamId}</TableCell>
-                  <TableCell>
-                    {paper.presenters.map(p => p.name).join(', ')}
-                  </TableCell>
-                  <TableCell>{paper.title}</TableCell>
-                  <TableCell sx={{ width: '120px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <RoomIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+          <Typography variant="subtitle1" color="primary">
+            {roomName}
+          </Typography>
+          <Chip
+            size="small"
+            label={`${papers.length} Presentations`}
+            sx={{ ml: 2 }}
+          />
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 2 }}>
+        <Grid container spacing={2}>
+          {sortedPapers.map((paper) => (
+            <Grid item xs={12} key={paper._id}>
+              <Card 
+                elevation={0}
+                sx={{ 
+                  border: 1,
+                  borderColor: 'divider',
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    boxShadow: 1
+                  }
+                }}
+              >
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle1" gutterBottom>
+                        {paper.title}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                        <Chip
+                          size="small"
+                          icon={<ScheduleIcon />}
+                          label={paper.timeSlot}
+                          variant="outlined"
+                        />
+                        <Chip
+                          size="small"
+                          icon={<PersonIcon />}
+                          label={paper.presenters[0]?.name}
+                          variant="outlined"
+                        />
+                        <Chip
+                          size="small"
+                          icon={<AssignmentIcon />}
+                          label={`ID: ${paper.teamId}`}
+                          variant="outlined"
+                        />
+                      </Box>
+                    </Box>
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       size="small"
                       onClick={() => onViewDetails(paper)}
                     >
                       View Details
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Collapse>
-    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </AccordionDetails>
+    </Accordion>
   );
 };
 
