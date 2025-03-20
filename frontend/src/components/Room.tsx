@@ -18,6 +18,7 @@ interface Presenter {
   name: string;
   email: string;
   contact: string;
+  hasSelectedSlot: boolean;
 }
 
 interface Paper {
@@ -27,9 +28,11 @@ interface Paper {
   title: string;
   presenters: Presenter[];
   synopsis: string;
-  day: number;
-  timeSlot: string;
-  room: number;
+  day: number | null;
+  timeSlot: string | null;
+  room: number | null;
+  isSlotAllocated: boolean;
+  presentationDate?: Date;
 }
 
 interface RoomProps {

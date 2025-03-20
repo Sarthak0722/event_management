@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 const paperSchema = new mongoose.Schema({
   domain: {
     type: String,
-    required: true,
-    enum: ['AI', 'ML', 'CLOUD', 'CYBERSEC', 'IOT']
+    required: true
   },
   title: {
     type: String,
@@ -13,17 +12,25 @@ const paperSchema = new mongoose.Schema({
   presenters: [{
     name: String,
     email: String,
-    contact: String
+    contact: String,
+    hasSelectedSlot: {
+      type: Boolean,
+      default: false
+    }
   }],
   synopsis: {
     type: String,
-    required: true
+    default: ''
   },
-  preferredDay: {
+  presentationDate: {
     type: Date,
     required: true
   },
   // Slot allocation fields
+  isSlotAllocated: {
+    type: Boolean,
+    default: false
+  },
   room: {
     type: Number,
     default: null
