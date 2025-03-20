@@ -64,8 +64,10 @@ interface Paper {
 }
 
 interface AvailableSlot {
-  room: number;
+  room: string;
   availableTimeSlots: string[];
+  totalPapers?: number;
+  roomsNeeded?: number;
 }
 
 const PresenterHome = () => {
@@ -80,7 +82,7 @@ const PresenterHome = () => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [slotSelectionOpen, setSlotSelectionOpen] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<number | ''>('');
+  const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | ''>('');
   const [slotError, setSlotError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -135,6 +137,8 @@ const PresenterHome = () => {
       if (response.data.success) {
         setAvailableSlots(response.data.data);
         setSlotSelectionOpen(true);
+        setSelectedRoom('');
+        setSelectedTimeSlot('');
       }
     } catch (err) {
       console.error('Error fetching available slots:', err);
@@ -397,17 +401,45 @@ const PresenterHome = () => {
                 {slotError}
               </Alert>
             )}
+            {selectedPaper && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                  Domain Information
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Chip
+                    size="small"
+                    icon={<AssignmentIcon />}
+                    label={`Total Papers: ${availableSlots[0]?.totalPapers || 0}`}
+                    variant="outlined"
+                  />
+                  <Chip
+                    size="small"
+                    icon={<RoomIcon />}
+                    label={`Rooms Needed: ${availableSlots[0]?.roomsNeeded || 0}`}
+                    variant="outlined"
+                  />
+                </Box>
+              </Box>
+            )}
             <Box sx={{ mt: 2 }}>
               <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel>Room</InputLabel>
                 <Select
                   value={selectedRoom}
                   label="Room"
-                  onChange={(e) => setSelectedRoom(e.target.value as number)}
+                  onChange={(e) => {
+                    setSelectedRoom(e.target.value);
+                    // Reset time slot when room changes
+                    setSelectedTimeSlot('');
+                  }}
                 >
                   {availableSlots.map((slot) => (
                     <MenuItem key={slot.room} value={slot.room}>
-                      Room {slot.room}
+                      {slot.room} 
+                      {slot.availableTimeSlots.length > 0 
+                        ? ` (${slot.availableTimeSlots.length} slots available)` 
+                        : ' (No slots available)'}
                     </MenuItem>
                   ))}
                 </Select>

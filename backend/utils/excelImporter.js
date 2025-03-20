@@ -7,6 +7,10 @@ const TIME_SLOTS = [
   '14:00 - 14:30', '14:30 - 15:00', '15:00 - 15:30', '15:30 - 16:00'
 ];
 
+// Constants
+const PAPERS_PER_ROOM = 12;
+const MAX_ROOMS_PER_DOMAIN = 10;
+
 // Domain abbreviations mapping
 const DOMAIN_CODES = {
   'Cognitive Systems, Vision and Perception': 'CSVP',
@@ -92,63 +96,85 @@ const processExcelData = async (filePath) => {
 
     console.log('Excel data:', data);
 
+    // Group papers by domain
+    const domainPapers = {};
+    data.forEach(row => {
+      if (!row.Domain || !row['Abstract Title']) return;
+      
+      if (!domainPapers[row.Domain]) {
+        domainPapers[row.Domain] = [];
+      }
+      domainPapers[row.Domain].push(row);
+    });
+
     // Get existing papers from database
     const existingPapers = await Paper.find();
     const newPapers = [];
     const duplicates = [];
     const errors = [];
 
-    // Process each row and check for duplicates
-    data.forEach((row, index) => {
-      try {
-        if (!row.Domain || !row['Abstract Title']) {
-          throw new Error(`Row ${index + 1}: Missing required fields (Domain or Abstract Title)`);
+    // Process each domain
+    Object.entries(domainPapers).forEach(([domain, papers]) => {
+      // Calculate rooms needed
+      const roomsNeeded = Math.min(
+        papers.length % PAPERS_PER_ROOM === 0 
+          ? Math.floor(papers.length / PAPERS_PER_ROOM)
+          : Math.floor(papers.length / PAPERS_PER_ROOM) + 1,
+        MAX_ROOMS_PER_DOMAIN
+      );
+
+      // Process papers in each room
+      papers.forEach((row, index) => {
+        try {
+          const presenterNames = row.Presenters ? row.Presenters.split(',').map(p => p.trim()) : [];
+          const contacts = row['Phone Numbers'] ? row['Phone Numbers'].toString().split(',').map(c => c.trim()) : [];
+          const emails = row.Emails ? row.Emails.split(',').map(e => e.trim()) : [];
+
+          if (presenterNames.length === 0 || emails.length === 0) {
+            throw new Error(`Row ${index + 1}: At least one presenter with email is required`);
+          }
+
+          const presenters = presenterNames.map((name, idx) => ({
+            name: name,
+            email: emails[idx] || '',
+            contact: contacts[idx] || '',
+            hasSelectedSlot: false
+          }));
+
+          // Use a default date if not provided or invalid
+          const defaultDate = new Date();
+          defaultDate.setHours(0, 0, 0, 0);
+
+          // Calculate room for this paper
+          const roomNumber = Math.floor(index / PAPERS_PER_ROOM) + 1;
+          const roomName = generateRoomName(domain, roomNumber);
+
+          const paper = {
+            domain: domain,
+            title: row['Abstract Title'],
+            presenters,
+            synopsis: row.synopsis || '',
+            presentationDate: defaultDate,
+            teamId: generateTeamId(domain, index),
+            isSlotAllocated: false,
+            room: roomName,
+            timeSlot: null,
+            day: null
+          };
+
+          const duplicateCheck = isDuplicatePaper(paper, existingPapers, newPapers);
+          if (duplicateCheck.isDuplicate) {
+            duplicates.push({
+              title: paper.title,
+              reason: duplicateCheck.reason
+            });
+          } else {
+            newPapers.push(paper);
+          }
+        } catch (error) {
+          errors.push(error.message);
         }
-
-        const presenterNames = row.Presenters ? row.Presenters.split(',').map(p => p.trim()) : [];
-        const contacts = row['Phone Numbers'] ? row['Phone Numbers'].toString().split(',').map(c => c.trim()) : [];
-        const emails = row.Emails ? row.Emails.split(',').map(e => e.trim()) : [];
-
-        if (presenterNames.length === 0 || emails.length === 0) {
-          throw new Error(`Row ${index + 1}: At least one presenter with email is required`);
-        }
-
-        const presenters = presenterNames.map((name, idx) => ({
-          name: name,
-          email: emails[idx] || '',
-          contact: contacts[idx] || '',
-          hasSelectedSlot: false
-        }));
-
-        // Use a default date if not provided or invalid
-        const defaultDate = new Date();
-        defaultDate.setHours(0, 0, 0, 0);
-
-        const paper = {
-          domain: row.Domain,
-          title: row['Abstract Title'],
-          presenters,
-          synopsis: row.synopsis || '',
-          presentationDate: defaultDate,
-          teamId: generateTeamId(row.Domain, index),
-          isSlotAllocated: false,
-          room: null,
-          timeSlot: null,
-          day: null
-        };
-
-        const duplicateCheck = isDuplicatePaper(paper, existingPapers, newPapers);
-        if (duplicateCheck.isDuplicate) {
-          duplicates.push({
-            title: paper.title,
-            reason: duplicateCheck.reason
-          });
-        } else {
-          newPapers.push(paper);
-        }
-      } catch (error) {
-        errors.push(error.message);
-      }
+      });
     });
 
     if (errors.length > 0) {

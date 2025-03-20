@@ -6,8 +6,16 @@ const path = require('path');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
-// Maximum number of rooms per domain
-const MAX_ROOMS_PER_DOMAIN = 3;
+// Constants
+const PAPERS_PER_ROOM = 12;  // Maximum number of papers per room
+const MAX_ROOMS_PER_DOMAIN = 10;  // Maximum rooms allowed for a single domain
+
+// Function to calculate number of rooms needed for a domain
+const calculateRoomsForDomain = (paperCount) => {
+  return paperCount % PAPERS_PER_ROOM === 0 
+    ? Math.floor(paperCount / PAPERS_PER_ROOM)
+    : Math.floor(paperCount / PAPERS_PER_ROOM) + 1;
+};
 
 // Import papers from Excel
 router.post('/import', async (req, res) => {
@@ -45,7 +53,18 @@ router.get('/', async (req, res) => {
 router.get('/available-slots/:domain', async (req, res) => {
   try {
     const { domain } = req.params;
-    const availableSlots = [];
+
+    // Count total papers in the domain
+    const totalPapers = await Paper.countDocuments({ 
+      domain, 
+      isSlotAllocated: false 
+    });
+
+    // Calculate number of rooms needed
+    const roomsNeeded = Math.min(
+      calculateRoomsForDomain(totalPapers), 
+      MAX_ROOMS_PER_DOMAIN
+    );
 
     // Get all papers in this domain that have allocated slots
     const allocatedPapers = await Paper.find({
@@ -60,8 +79,9 @@ router.get('/available-slots/:domain', async (req, res) => {
       occupiedSlots.set(key, true);
     });
 
-    // Generate room names for this domain
-    for (let roomNum = 1; roomNum <= MAX_ROOMS_PER_DOMAIN; roomNum++) {
+    // Generate available slots for each room
+    const availableSlots = [];
+    for (let roomNum = 1; roomNum <= roomsNeeded; roomNum++) {
       const roomName = generateRoomName(domain, roomNum);
       const availableTimeSlots = TIME_SLOTS.filter(timeSlot => {
         const key = `${roomName}-${timeSlot}`;
@@ -71,7 +91,9 @@ router.get('/available-slots/:domain', async (req, res) => {
       if (availableTimeSlots.length > 0) {
         availableSlots.push({
           room: roomName,
-          availableTimeSlots
+          availableTimeSlots,
+          totalPapers,
+          roomsNeeded
         });
       }
     }
@@ -134,7 +156,7 @@ router.post('/select-slot/:paperId', async (req, res) => {
       });
     }
 
-    // Check if slot is available
+    // Check if slot is available in the specific domain and room
     const existingPaper = await Paper.findOne({
       domain: paper.domain,
       room,
