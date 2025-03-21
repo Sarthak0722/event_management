@@ -41,12 +41,18 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthChecking, setIsAuthChecking] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const cancelTokenRef = useRef<CancelTokenSource | null>(null);
   const authCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialCheckDoneRef = useRef(false);
 
   const checkAuth = useCallback(async () => {
+    // Prevent multiple simultaneous auth checks
+    if (isAuthChecking) return;
+    setIsAuthChecking(true);
+
     // Clear any existing timeout
     if (authCheckTimeoutRef.current) {
       clearTimeout(authCheckTimeoutRef.current);
@@ -95,13 +101,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } finally {
       setLoading(false);
+      setIsAuthChecking(false);
       cancelTokenRef.current = null;
+      initialCheckDoneRef.current = true;
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, isAuthChecking]);
 
   useEffect(() => {
-    // Initial auth check
-    checkAuth();
+    // Only perform initial auth check if not done yet
+    if (!initialCheckDoneRef.current) {
+      checkAuth();
+    }
 
     // Cleanup function
     return () => {
@@ -179,6 +189,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setUser(null);
       setLoading(false);
+      initialCheckDoneRef.current = false; // Reset initial check on logout
       navigate('/login', { replace: true });
     }
   };
