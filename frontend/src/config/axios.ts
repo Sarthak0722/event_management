@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 const instance = axios.create({
-    baseURL: 'http://localhost:5000/api',
+    baseURL: API_URL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
@@ -13,9 +15,9 @@ const instance = axios.create({
 instance.interceptors.response.use(
     response => response,
     error => {
-        if (axios.isCancel(error)) {
-            console.log('Request cancelled:', error.message);
-            return;
+        if (error.code === 'ECONNABORTED') {
+            console.log('Request canceled or timed out');
+            return Promise.reject(error);
         }
 
         // Handle 401 (Unauthorized) errors by redirecting to login
