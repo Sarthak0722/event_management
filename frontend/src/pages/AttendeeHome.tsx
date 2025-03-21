@@ -87,6 +87,8 @@ interface DomainGroup {
   };
 }
 
+type SearchCriteria = 'default' | 'paperId' | 'title' | 'presenter';
+
 const ALLOWED_DATES = [
   '2026-01-09',
   '2026-01-10',
@@ -106,6 +108,7 @@ const AttendeeHome = () => {
   const [expandedRooms, setExpandedRooms] = useState<{ [key: string]: boolean }>({});
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>('default');
 
   useEffect(() => {
     if (selectedDate) {
@@ -154,9 +157,35 @@ const AttendeeHome = () => {
 
   const filteredPapers = papers.filter(paper => {
     const matchesDomain = selectedDomain === 'All' || paper.domain === selectedDomain;
-    const matchesSearch = searchTerm === '' || 
-      paper.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      paper.presenters.some(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    
+    let matchesSearch = true;
+    if (searchTerm !== '') {
+      switch (searchCriteria) {
+        case 'paperId':
+          matchesSearch = paper.paperId.toLowerCase().includes(searchTermLower);
+          break;
+        case 'title':
+          matchesSearch = paper.title.toLowerCase().includes(searchTermLower);
+          break;
+        case 'presenter':
+          matchesSearch = paper.presenters.some(p => 
+            p.name.toLowerCase().includes(searchTermLower) ||
+            p.email.toLowerCase().includes(searchTermLower)
+          );
+          break;
+        default:
+          // Default search across all fields
+          matchesSearch = 
+            paper.paperId.toLowerCase().includes(searchTermLower) ||
+            paper.title.toLowerCase().includes(searchTermLower) ||
+            paper.presenters.some(p => 
+              p.name.toLowerCase().includes(searchTermLower) ||
+              p.email.toLowerCase().includes(searchTermLower)
+            );
+      }
+    }
+    
     return matchesDomain && matchesSearch;
   });
 
@@ -241,20 +270,35 @@ const AttendeeHome = () => {
             </LocalizationProvider>
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-            />
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Search By</InputLabel>
+                <Select
+                  value={searchCriteria}
+                  label="Search By"
+                  onChange={(e) => setSearchCriteria(e.target.value as SearchCriteria)}
+                >
+                  <MenuItem value="default">All Fields</MenuItem>
+                  <MenuItem value="paperId">Paper ID</MenuItem>
+                  <MenuItem value="title">Title</MenuItem>
+                  <MenuItem value="presenter">Presenter</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                size="small"
+                label={`Search by ${searchCriteria === 'default' ? 'all fields' : searchCriteria}`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
           </Grid>
           <Grid item xs={12} md={4}>
             <FormControl fullWidth size="small">
