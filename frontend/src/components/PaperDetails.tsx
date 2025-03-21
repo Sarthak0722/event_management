@@ -25,7 +25,8 @@ import {
   Phone as PhoneIcon,
   Domain as DomainIcon,
   ExpandMore as ExpandMoreIcon,
-  Description as DescriptionIcon
+  Description as DescriptionIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Paper } from '../types/paper';
@@ -73,7 +74,7 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ pt: 3 }}>
+      <DialogContent>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Typography variant="h5" gutterBottom>
@@ -85,6 +86,11 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
                 icon={<DomainIcon />}
                 label={paper.domain}
                 color="primary"
+              />
+              <Chip
+                size="small"
+                icon={<AssignmentIcon />}
+                label={`ID: ${paper.teamId}`}
               />
             </Box>
           </Grid>
