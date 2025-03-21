@@ -84,6 +84,7 @@ const PresenterHome = () => {
   const [expandedDomain, setExpandedDomain] = useState<string | false>(false);
   const [expandedRooms, setExpandedRooms] = useState<{ [key: string]: boolean }>({});
   const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleViewDate, setScheduleViewDate] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchPresenterPapers();
@@ -95,7 +96,13 @@ const PresenterHome = () => {
     setShowSchedule(hasBookedSlot);
     
     if (hasBookedSlot) {
-      fetchScheduledPapers();
+      // Set initial schedule view date to the first booked paper's date
+      const bookedPaper = papers.find(p => p.selectedSlot?.bookedBy);
+      if (bookedPaper?.selectedSlot?.date) {
+        const date = new Date(bookedPaper.selectedSlot.date);
+        setScheduleViewDate(date);
+        fetchScheduledPapers(date);
+      }
     }
   }, [papers]);
 
@@ -119,12 +126,11 @@ const PresenterHome = () => {
     }
   };
 
-  const fetchScheduledPapers = async () => {
+  const fetchScheduledPapers = async (date: Date) => {
     try {
-      if (!papers[0]?.selectedSlot?.date) return;
-      
+      const formattedDate = format(date, 'yyyy-MM-dd');
       const response = await axios.get('/papers/by-date', {
-        params: { date: papers[0].selectedSlot.date }
+        params: { date: formattedDate }
       });
       
       if (response.data.success) {
@@ -304,6 +310,13 @@ const PresenterHome = () => {
     return acc;
   }, {} as { [domain: string]: { [room: string]: Paper[] } });
 
+  const handleScheduleDateChange = (date: Date | null) => {
+    setScheduleViewDate(date);
+    if (date) {
+      fetchScheduledPapers(date);
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -482,6 +495,23 @@ const PresenterHome = () => {
             </Typography>
             
             <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} md={4}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="View Schedule For"
+                    value={scheduleViewDate}
+                    onChange={handleScheduleDateChange}
+                    shouldDisableDate={isDateDisabled}
+                    defaultCalendarMonth={new Date(ALLOWED_DATES[0])}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        size: "small"
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
+              </Grid>
               <Grid item xs={12} md={8}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <FormControl size="small" sx={{ minWidth: 120 }}>
