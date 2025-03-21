@@ -39,6 +39,7 @@ interface Paper {
   room: string | null;
   isSlotAllocated: boolean;
   presentationDate?: Date;
+  paperId: string;
 }
 
 interface RoomProps {
@@ -138,7 +139,8 @@ const Room: React.FC<RoomProps> = ({
                         <Chip
                           size="small"
                           icon={<AssignmentIcon />}
-                          label={`ID: ${paper.teamId}`}
+                          label={`Paper ID: ${paper.paperId}`}
+                          color="secondary"
                           variant="outlined"
                         />
                       </Box>

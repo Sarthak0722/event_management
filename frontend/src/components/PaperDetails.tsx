@@ -90,7 +90,8 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
               <Chip
                 size="small"
                 icon={<AssignmentIcon />}
-                label={`ID: ${paper.teamId}`}
+                label={`Paper ID: ${paper.paperId}`}
+                color="secondary"
               />
             </Box>
           </Grid>

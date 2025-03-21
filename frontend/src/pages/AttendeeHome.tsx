@@ -41,7 +41,8 @@ import {
   Logout as LogoutIcon,
   Domain as DomainIcon,
   ExpandMore as ExpandMoreIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -52,17 +53,18 @@ interface Paper {
   _id: string;
   title: string;
   domain: string;
+  paperId: string;
   presenters: Array<{
     name: string;
     email: string;
-    contact?: string;
+    phone: string;
   }>;
   synopsis: string;
-  teamId: string;
   selectedSlot?: {
     date: string;
     room: string;
     timeSlot: string;
+    bookedBy?: string;
   };
 }
 
@@ -503,7 +505,12 @@ const AttendeeHome = () => {
                       <Typography variant="subtitle2" color="textSecondary">
                         Paper ID:
                       </Typography>
-                      <Chip size="small" label={selectedPaper.teamId} />
+                      <Chip 
+                        size="small" 
+                        icon={<AssignmentIcon />}
+                        label={selectedPaper.paperId}
+                        color="secondary"
+                      />
                     </Box>
                   </Grid>
                 </Grid>

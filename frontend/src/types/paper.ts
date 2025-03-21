@@ -6,19 +6,15 @@ export interface Presenter {
 
 export interface Paper {
   _id: string;
-  domain: string;
   title: string;
-  presenters: Presenter[];
+  domain: string;
+  paperId: string;
   synopsis: string;
-  teamId: string;
-  room?: string | null;
-  timeSlot?: string | null;
-  day?: number | null;
+  presenters: Presenter[];
   selectedSlot?: {
     date: string;
     room: string;
     timeSlot: string;
-    bookedBy: string;
+    bookedBy?: string;
   };
-  isSlotAllocated: boolean;
 } 

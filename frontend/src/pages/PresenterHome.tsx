@@ -349,7 +349,8 @@ const PresenterHome = () => {
                               <Chip
                                 size="small"
                                 icon={<AssignmentIcon />}
-                                label={`ID: ${paper.teamId}`}
+                                label={`Paper ID: ${paper.paperId}`}
+                                color="secondary"
                               />
                               {paper.selectedSlot && paper.selectedSlot.bookedBy ? (
                                 <Chip
