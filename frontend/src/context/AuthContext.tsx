@@ -41,17 +41,22 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const cancelTokenRef = useRef<CancelTokenSource | null>(null);
+  const authCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const checkAuth = useCallback(async () => {
-    if (authChecked) return; // Skip if we've already checked auth
+    // Clear any existing timeout
+    if (authCheckTimeoutRef.current) {
+      clearTimeout(authCheckTimeoutRef.current);
+      authCheckTimeoutRef.current = null;
+    }
 
     // Cancel any previous request
     if (cancelTokenRef.current) {
       cancelTokenRef.current.cancel('Operation canceled due to new request.');
+      cancelTokenRef.current = null;
     }
 
     // Create a new cancel token
@@ -77,26 +82,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
     } catch (error) {
-      if (!axios.isCancel(error)) {
-        console.error('Auth check error:', error);
-        setUser(null);
-        if (!['/login', '/register'].includes(location.pathname)) {
-          navigate('/login', { replace: true });
-        }
+      if (axios.isCancel(error)) {
+        console.log('Request canceled:', error.message);
+        return;
+      }
+      
+      console.error('Auth check error:', error);
+      setUser(null);
+      
+      if (!['/login', '/register'].includes(location.pathname)) {
+        navigate('/login', { replace: true });
       }
     } finally {
       setLoading(false);
-      setAuthChecked(true);
+      cancelTokenRef.current = null;
     }
-  }, [navigate, location.pathname, authChecked]);
+  }, [navigate, location.pathname]);
 
   useEffect(() => {
+    // Initial auth check
     checkAuth();
 
-    // Cleanup function to cancel pending requests
+    // Cleanup function
     return () => {
       if (cancelTokenRef.current) {
         cancelTokenRef.current.cancel('Component unmounted');
+        cancelTokenRef.current = null;
+      }
+      if (authCheckTimeoutRef.current) {
+        clearTimeout(authCheckTimeoutRef.current);
+        authCheckTimeoutRef.current = null;
       }
     };
   }, [checkAuth]);
@@ -114,15 +129,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(userData);
         navigate(`/${userData.role.toLowerCase()}`, { replace: true });
         return userData;
-      } else {
-        throw new Error(response.data.message || 'Login failed');
       }
+      throw new Error(response.data.message || 'Login failed');
     } catch (error: any) {
-      if (!axios.isCancel(error)) {
-        console.error('Login error:', error);
-        throw new Error(error.response?.data?.message || 'Login failed');
+      console.error('Login error:', error);
+      if (axios.isCancel(error)) {
+        return null;
       }
-      return null;
+      throw new Error(error.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -142,14 +156,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const userData = response.data.data.user;
         setUser(userData);
         navigate(`/${userData.role.toLowerCase()}`, { replace: true });
-      } else {
-        throw new Error(response.data.message || 'Registration failed');
+        return;
       }
+      throw new Error(response.data.message || 'Registration failed');
     } catch (error: any) {
-      if (!axios.isCancel(error)) {
-        console.error('Registration error:', error);
-        throw new Error(error.response?.data?.message || 'Registration failed');
+      console.error('Registration error:', error);
+      if (axios.isCancel(error)) {
+        return;
       }
+      throw new Error(error.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -159,15 +174,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     try {
       await axiosInstance.post('/auth/logout');
-      setUser(null);
-      setAuthChecked(false); // Reset auth check on logout
-      navigate('/login', { replace: true });
     } catch (error) {
-      if (!axios.isCancel(error)) {
-        console.error('Logout failed:', error);
-      }
+      console.error('Logout error:', error);
     } finally {
+      setUser(null);
       setLoading(false);
+      navigate('/login', { replace: true });
     }
   };
 

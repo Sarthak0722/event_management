@@ -1,13 +1,16 @@
 import axios from 'axios';
 
-// Log the API URL for debugging
-console.log('API URL:', process.env.REACT_APP_API_URL);
+const API_URL = process.env.REACT_APP_API_URL;
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+if (!API_URL) {
+    console.error('REACT_APP_API_URL is not defined in environment variables!');
+}
+
+console.log('Using API URL:', API_URL);
 
 const instance = axios.create({
     baseURL: API_URL,
-    timeout: 15000, // Increased timeout for Render's cold starts
+    timeout: 30000, // Increased timeout for Render's cold starts
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json'
@@ -17,7 +20,10 @@ const instance = axios.create({
 // Add request interceptor for debugging
 instance.interceptors.request.use(
     config => {
-        console.log(`Making ${config.method?.toUpperCase()} request to: ${config.baseURL}${config.url}`);
+        // Don't log auth check requests to reduce console noise
+        if (config.url !== '/auth/me') {
+            console.log(`Making ${config.method?.toUpperCase()} request to: ${config.baseURL}${config.url}`);
+        }
         return config;
     },
     error => {
@@ -30,16 +36,30 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
     response => response,
     error => {
-        console.error('Response error:', {
-            message: error.message,
-            code: error.code,
-            status: error.response?.status,
-            data: error.response?.data
-        });
+        // Don't log canceled requests or auth check errors to reduce console noise
+        if (!axios.isCancel(error) && error.config.url !== '/auth/me') {
+            if (!error.response) {
+                console.error('Network Error - No Response:', {
+                    message: error.message,
+                    code: error.code,
+                    config: {
+                        url: error.config?.url,
+                        baseURL: error.config?.baseURL,
+                        method: error.config?.method
+                    }
+                });
+            } else {
+                console.error('Response Error:', {
+                    message: error.message,
+                    code: error.code,
+                    status: error.response?.status,
+                    data: error.response?.data
+                });
+            }
+        }
 
         if (error.code === 'ECONNABORTED') {
             console.log('Request canceled or timed out');
-            return Promise.reject(error);
         }
 
         if (error.response?.status === 401) {
