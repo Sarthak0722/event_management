@@ -34,56 +34,17 @@ const generateTeamId = (domain, index) => {
   return `${domainCode}${String(index + 1).padStart(3, '0')}`;
 };
 
-const isDuplicatePaper = (paper, existingPapers, newPapers) => {
-  // Check for duplicate title
-  const titleDuplicate = [...existingPapers, ...newPapers].some(
-    p => p.title.toLowerCase() === paper.title.toLowerCase() && p !== paper
+const isDuplicateTitle = (title, existingPapers, newPapers) => {
+  return [...existingPapers, ...newPapers].some(
+    p => p.title.toLowerCase() === title.toLowerCase()
   );
-  if (titleDuplicate) {
-    return { isDuplicate: true, reason: `Paper with title "${paper.title}" already exists` };
-  }
-
-  // Check for duplicate presenters (if any presenter is already presenting another paper)
-  const presenterEmails = paper.presenters.map(p => p.email.toLowerCase());
-  const duplicatePresenter = [...existingPapers, ...newPapers].some(p => {
-    if (p === paper) return false;
-    return p.presenters.some(presenter => 
-      presenterEmails.includes(presenter.email.toLowerCase())
-    );
-  });
-
-  if (duplicatePresenter) {
-    return { 
-      isDuplicate: true, 
-      reason: `One or more presenters (${presenterEmails.join(', ')}) are already presenting another paper` 
-    };
-  }
-
-  return { isDuplicate: false };
 };
 
-const parseDate = (dateValue) => {
-  if (!dateValue) return null;
-  
-  // If it's already a Date object
-  if (dateValue instanceof Date && !isNaN(dateValue)) {
-    return dateValue;
-  }
-
-  // If it's a number (Excel serial date)
-  if (typeof dateValue === 'number') {
-    const date = xlsx.SSF.parse_date_code(dateValue);
-    return new Date(date.y, date.m - 1, date.d);
-  }
-
-  // If it's a string, try parsing it
-  const date = new Date(dateValue);
-  if (!isNaN(date.getTime())) {
-    return date;
-  }
-
-  // If all parsing attempts fail
-  throw new Error(`Invalid date format: ${dateValue}`);
+const isDuplicatePresenter = (email, existingPapers, newPapers, currentPaper) => {
+  return [...existingPapers, ...newPapers].some(paper => {
+    if (paper === currentPaper) return false;
+    return paper.presenters.some(presenter => presenter.email.toLowerCase() === email.toLowerCase());
+  });
 };
 
 const processExcelData = async (filePath) => {
@@ -94,87 +55,74 @@ const processExcelData = async (filePath) => {
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
 
-    console.log('Excel data:', data);
-
-    // Group papers by domain
-    const domainPapers = {};
-    data.forEach(row => {
-      if (!row.Domain || !row['Abstract Title']) return;
-      
-      if (!domainPapers[row.Domain]) {
-        domainPapers[row.Domain] = [];
-      }
-      domainPapers[row.Domain].push(row);
-    });
-
     // Get existing papers from database
     const existingPapers = await Paper.find();
     const newPapers = [];
     const duplicates = [];
     const errors = [];
 
-    // Process each domain
-    Object.entries(domainPapers).forEach(([domain, papers]) => {
-      // Calculate rooms needed
-      const roomsNeeded = Math.min(
-        papers.length % PAPERS_PER_ROOM === 0 
-          ? Math.floor(papers.length / PAPERS_PER_ROOM)
-          : Math.floor(papers.length / PAPERS_PER_ROOM) + 1,
-        MAX_ROOMS_PER_DOMAIN
-      );
-
-      // Process papers in each room
-      papers.forEach((row, index) => {
-        try {
-          const presenterNames = row.Presenters ? row.Presenters.split(',').map(p => p.trim()) : [];
-          const contacts = row['Phone Numbers'] ? row['Phone Numbers'].toString().split(',').map(c => c.trim()) : [];
-          const emails = row.Emails ? row.Emails.split(',').map(e => e.trim()) : [];
-
-          if (presenterNames.length === 0 || emails.length === 0) {
-            throw new Error(`Row ${index + 1}: At least one presenter with email is required`);
-          }
-
-          const presenters = presenterNames.map((name, idx) => ({
-            name: name,
-            email: emails[idx] || '',
-            contact: contacts[idx] || '',
-            hasSelectedSlot: false
-          }));
-
-          // Use a default date if not provided or invalid
-          const defaultDate = new Date();
-          defaultDate.setHours(0, 0, 0, 0);
-
-          // Calculate room for this paper
-          const roomNumber = Math.floor(index / PAPERS_PER_ROOM) + 1;
-          const roomName = generateRoomName(domain, roomNumber);
-
-          const paper = {
-            domain: domain,
-            title: row['Abstract Title'],
-            presenters,
-            synopsis: row.synopsis || '',
-            presentationDate: defaultDate,
-            teamId: generateTeamId(domain, index),
-            isSlotAllocated: false,
-            room: roomName,
-            timeSlot: null,
-            day: null
-          };
-
-          const duplicateCheck = isDuplicatePaper(paper, existingPapers, newPapers);
-          if (duplicateCheck.isDuplicate) {
-            duplicates.push({
-              title: paper.title,
-              reason: duplicateCheck.reason
-            });
-          } else {
-            newPapers.push(paper);
-          }
-        } catch (error) {
-          errors.push(error.message);
+    // Process each row
+    data.forEach((row, index) => {
+      try {
+        if (!row.Domain || !row['Abstract Title']) {
+          throw new Error(`Row ${index + 1}: Domain and Abstract Title are required`);
         }
-      });
+
+        // Check for duplicate title
+        if (isDuplicateTitle(row['Abstract Title'], existingPapers, newPapers)) {
+          duplicates.push({
+            title: row['Abstract Title'],
+            reason: 'Duplicate title'
+          });
+          return;
+        }
+
+        // Process presenter information
+        const presenterNames = row.Presenters ? row.Presenters.split(',').map(p => p.trim()) : [];
+        const emails = row.Emails ? row.Emails.split(',').map(e => e.trim()) : [];
+        const contacts = row['Phone Numbers'] ? row['Phone Numbers'].toString().split(',').map(c => c.trim()) : [];
+
+        if (presenterNames.length === 0 || emails.length === 0) {
+          throw new Error(`Row ${index + 1}: At least one presenter with email is required`);
+        }
+
+        // Create presenters array
+        const presenters = presenterNames.map((name, idx) => ({
+          name: name,
+          email: emails[idx] || '',
+          contact: contacts[idx] || ''
+        }));
+
+        // Check for duplicate presenters
+        const duplicatePresenterEmail = presenters.find(presenter => 
+          isDuplicatePresenter(presenter.email, existingPapers, newPapers, null)
+        );
+
+        if (duplicatePresenterEmail) {
+          duplicates.push({
+            title: row['Abstract Title'],
+            reason: `Presenter with email ${duplicatePresenterEmail.email} is already presenting another paper`
+          });
+          return;
+        }
+
+        const paper = new Paper({
+          domain: row.Domain,
+          title: row['Abstract Title'],
+          presenters: presenters,
+          synopsis: row.Synopsis || '',
+          teamId: generateTeamId(row.Domain, index),
+          selectedSlot: {
+            date: null,
+            room: '',
+            timeSlot: ''
+          }
+        });
+
+        newPapers.push(paper);
+      } catch (error) {
+        errors.push(error.message);
+      }
     });
 
     if (errors.length > 0) {
@@ -185,32 +133,28 @@ const processExcelData = async (filePath) => {
       };
     }
 
-    if (duplicates.length > 0) {
-      console.log('Duplicate papers found:', duplicates);
-    }
-
     if (newPapers.length === 0) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: 'No new papers to import. All papers are duplicates or contain errors.',
         duplicates,
         errors
       };
     }
 
-    // Save to database without slot allocation
+    // Save to database
     await Paper.insertMany(newPapers);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: `Successfully imported ${newPapers.length} papers.${duplicates.length > 0 ? ` Skipped ${duplicates.length} duplicate papers.` : ''}`,
       duplicates,
       errors
     };
   } catch (error) {
     console.error('Error importing Excel data:', error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       message: error.message,
       errors: [error.message]
     };

@@ -1,52 +1,43 @@
 const mongoose = require('mongoose');
 
 const paperSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    unique: true
+  },
   domain: {
     type: String,
     required: true
   },
-  title: {
-    type: String,
-    required: true
-  },
   presenters: [{
-    name: String,
-    email: String,
-    contact: String,
-    hasSelectedSlot: {
-      type: Boolean,
-      default: false
-    }
+    name: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    },
+    contact: String
   }],
   synopsis: {
     type: String,
     default: ''
   },
-  presentationDate: {
-    type: Date,
+  teamId: {
+    type: String,
     required: true
   },
-  // Slot allocation fields
+  selectedSlot: {
+    date: Date,
+    room: String,
+    timeSlot: String,
+    bookedBy: String
+  },
   isSlotAllocated: {
     type: Boolean,
     default: false
-  },
-  room: {
-    type: String,
-    default: null
-  },
-  timeSlot: {
-    type: String,
-    default: null
-  },
-  day: {
-    type: Number,
-    default: null
-  },
-  teamId: {
-    type: String,
-    required: true,
-    unique: true
   }
 });
 

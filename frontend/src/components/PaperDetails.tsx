@@ -33,22 +33,27 @@ import {
 interface Presenter {
   name: string;
   email: string;
-  contact: string;
+  contact?: string;
   hasSelectedSlot: boolean;
 }
 
 interface Paper {
   _id: string;
-  domain: string;
-  teamId: string;
   title: string;
+  domain: string;
   presenters: Presenter[];
   synopsis: string;
-  day: number | null;
-  timeSlot: string | null;
+  teamId: string;
   room: number | null;
+  timeSlot: string | null;
+  day: number | null;
   isSlotAllocated: boolean;
-  presentationDate?: Date;
+  selectedSlot?: {
+    date: string;
+    room: string;
+    timeSlot: string;
+    bookedBy: string;
+  };
 }
 
 interface PaperDetailsProps {

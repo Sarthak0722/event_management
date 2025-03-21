@@ -27,7 +27,10 @@ import {
   AppBar,
   Toolbar,
   Avatar,
-  Divider
+  Divider,
+  Tab,
+  Tabs,
+  SelectChangeEvent
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -42,11 +45,15 @@ import {
   Warning as WarningIcon
 } from '@mui/icons-material';
 import PaperDetails from '../components/PaperDetails';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format, isWithinInterval, parseISO } from 'date-fns';
 
 interface Presenter {
   name: string;
   email: string;
-  contact: string;
+  contact?: string;
   hasSelectedSlot: boolean;
 }
 
@@ -56,19 +63,29 @@ interface Paper {
   domain: string;
   presenters: Presenter[];
   synopsis: string;
+  teamId: string;
   room: number | null;
   timeSlot: string | null;
-  teamId: string;
   day: number | null;
   isSlotAllocated: boolean;
+  selectedSlot?: {
+    date: string;
+    room: string;
+    timeSlot: string;
+    bookedBy: string;
+  };
 }
 
 interface AvailableSlot {
   room: string;
-  availableTimeSlots: string[];
-  totalPapers?: number;
-  roomsNeeded?: number;
+  timeSlots: string[];
 }
+
+const ALLOWED_DATES = [
+  '2026-01-09',
+  '2026-01-10',
+  '2026-01-11'
+];
 
 const PresenterHome = () => {
   const theme = useTheme();
@@ -86,6 +103,7 @@ const PresenterHome = () => {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | ''>('');
   const [slotError, setSlotError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchPresenterPapers();
@@ -177,6 +195,104 @@ const PresenterHome = () => {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const fetchAvailableSlots = async (domain: string, date: Date) => {
+    try {
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      const response = await axios.get('/api/papers/available-slots', {
+        params: { domain, date: formattedDate }
+      });
+      if (response.data.success) {
+        setAvailableSlots(response.data.data.availableSlots);
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to fetch available slots');
+    }
+  };
+
+  const handleOpenDialog = (paper: Paper) => {
+    if (paper.selectedSlot && paper.selectedSlot.bookedBy && paper.selectedSlot.bookedBy !== user?.email) {
+      const bookedByPresenter = paper.presenters.find(p => p.email === paper.selectedSlot?.bookedBy);
+      setError(`This slot has already been booked by ${bookedByPresenter?.name || 'another presenter'}`);
+      return;
+    }
+
+    setSelectedPaper(paper);
+    setSelectedDate(null);
+    setSelectedRoom('');
+    setSelectedTimeSlot('');
+    setSlotSelectionOpen(true);
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const handleCloseDialog = () => {
+    setSlotSelectionOpen(false);
+    setSelectedPaper(null);
+    setSelectedDate(null);
+    setSelectedRoom('');
+    setSelectedTimeSlot('');
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const handleDateChange = (date: Date | null) => {
+    setSelectedDate(date);
+    setSelectedRoom('');
+    setSelectedTimeSlot('');
+    if (date && selectedPaper) {
+      fetchAvailableSlots(selectedPaper.domain, date);
+    }
+  };
+
+  const handleRoomChange = (event: SelectChangeEvent<string>) => {
+    setSelectedRoom(event.target.value);
+    setSelectedTimeSlot('');
+  };
+
+  const handleTimeSlotChange = (event: SelectChangeEvent<string>) => {
+    setSelectedTimeSlot(event.target.value);
+  };
+
+  const isDateDisabled = (date: Date) => {
+    return !ALLOWED_DATES.includes(format(date, 'yyyy-MM-dd'));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedPaper || !selectedDate || !selectedRoom || !selectedTimeSlot || !user?.email) {
+      setError('Please select all required fields');
+      return;
+    }
+
+    try {
+      const response = await axios.post('/api/papers/select-slot', {
+        paperId: selectedPaper._id,
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        room: selectedRoom,
+        timeSlot: selectedTimeSlot,
+        presenterEmail: user.email
+      });
+
+      if (response.data.success) {
+        setSuccessMessage('Slot selected successfully!');
+        const updatedPaper = {
+          ...response.data.data,
+          isSlotAllocated: true,
+          room: selectedRoom,
+          timeSlot: selectedTimeSlot,
+          day: new Date(selectedDate).getDate()
+        };
+        setPapers(prevPapers => 
+          prevPapers.map(p => 
+            p._id === selectedPaper._id ? updatedPaper : p
+          )
+        );
+        setTimeout(handleCloseDialog, 2000);
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to select slot');
+    }
   };
 
   if (loading) {
@@ -312,13 +428,52 @@ const PresenterHome = () => {
                                 icon={<AssignmentIcon />}
                                 label={`ID: ${paper.teamId}`}
                               />
-                              <Chip
-                                size="small"
-                                icon={paper.isSlotAllocated ? <CheckCircleIcon /> : <WarningIcon />}
-                                label={paper.isSlotAllocated ? 'Slot Allocated' : 'No Slot Selected'}
-                                color={paper.isSlotAllocated ? 'success' : 'warning'}
-                              />
+                              {paper.selectedSlot ? (
+                                <Chip
+                                  size="small"
+                                  icon={<CheckCircleIcon />}
+                                  label={paper.selectedSlot.bookedBy === user?.email ? 'Booked by you' : 'Slot Booked'}
+                                  color={paper.selectedSlot.bookedBy === user?.email ? 'success' : 'default'}
+                                />
+                              ) : (
+                                <Chip
+                                  size="small"
+                                  icon={<WarningIcon />}
+                                  label="No Slot Selected"
+                                  color="warning"
+                                />
+                              )}
                             </Box>
+                            {paper.selectedSlot && (
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                <Chip
+                                  size="small"
+                                  icon={<EventIcon />}
+                                  label={format(new Date(paper.selectedSlot.date), 'dd MMM yyyy')}
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  size="small"
+                                  icon={<RoomIcon />}
+                                  label={`Room ${paper.selectedSlot.room}`}
+                                  variant="outlined"
+                                />
+                                <Chip
+                                  size="small"
+                                  icon={<ScheduleIcon />}
+                                  label={paper.selectedSlot.timeSlot}
+                                  variant="outlined"
+                                />
+                                {paper.selectedSlot.bookedBy !== user?.email && (
+                                  <Chip
+                                    size="small"
+                                    icon={<PersonIcon />}
+                                    label={`Booked by: ${paper.presenters.find(p => p.email === paper.selectedSlot?.bookedBy)?.name}`}
+                                    variant="outlined"
+                                  />
+                                )}
+                              </Box>
+                            )}
                           </Box>
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <Button
@@ -329,44 +484,19 @@ const PresenterHome = () => {
                             >
                               View Details
                             </Button>
-                            {!paper.isSlotAllocated && (
+                            {(!paper.selectedSlot || paper.selectedSlot.bookedBy === user?.email) && (
                               <Button
                                 variant="contained"
                                 size="small"
-                                onClick={() => handleSelectSlot(paper)}
+                                onClick={() => handleOpenDialog(paper)}
                                 startIcon={<ScheduleIcon />}
                               >
-                                Select Slot
+                                {paper.selectedSlot ? 'Change Slot' : 'Select Slot'}
                               </Button>
                             )}
                           </Box>
                         </Box>
                       </Grid>
-                      {paper.isSlotAllocated && (
-                        <Grid item xs={12}>
-                          <Divider sx={{ mb: 2 }} />
-                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                            <Chip
-                              size="small"
-                              icon={<RoomIcon />}
-                              label={`Room ${paper.room}`}
-                              variant="outlined"
-                            />
-                            <Chip
-                              size="small"
-                              icon={<ScheduleIcon />}
-                              label={paper.timeSlot}
-                              variant="outlined"
-                            />
-                            <Chip
-                              size="small"
-                              icon={<EventIcon />}
-                              label={`Day ${paper.day}`}
-                              variant="outlined"
-                            />
-                          </Box>
-                        </Grid>
-                      )}
                     </Grid>
                   </CardContent>
                 </Card>
@@ -383,7 +513,7 @@ const PresenterHome = () => {
 
         <Dialog 
           open={slotSelectionOpen} 
-          onClose={() => setSlotSelectionOpen(false)}
+          onClose={handleCloseDialog}
           maxWidth="sm"
           fullWidth
           PaperProps={{
@@ -410,67 +540,81 @@ const PresenterHome = () => {
                   <Chip
                     size="small"
                     icon={<AssignmentIcon />}
-                    label={`Total Papers: ${availableSlots[0]?.totalPapers || 0}`}
+                    label={`Total Papers: ${availableSlots[0]?.timeSlots.length || 0}`}
                     variant="outlined"
                   />
                   <Chip
                     size="small"
                     icon={<RoomIcon />}
-                    label={`Rooms Needed: ${availableSlots[0]?.roomsNeeded || 0}`}
+                    label={`Rooms Needed: ${availableSlots[0]?.timeSlots.length || 0}`}
                     variant="outlined"
                   />
                 </Box>
               </Box>
             )}
             <Box sx={{ mt: 2 }}>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Room</InputLabel>
-                <Select
-                  value={selectedRoom}
-                  label="Room"
-                  onChange={(e) => {
-                    setSelectedRoom(e.target.value);
-                    // Reset time slot when room changes
-                    setSelectedTimeSlot('');
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <DatePicker
+                  label="Select Date"
+                  value={selectedDate}
+                  onChange={handleDateChange}
+                  shouldDisableDate={isDateDisabled}
+                  defaultCalendarMonth={new Date('2026-01-09')}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      sx: { mb: 2 }
+                    }
                   }}
-                >
-                  {availableSlots.map((slot) => (
-                    <MenuItem key={slot.room} value={slot.room}>
-                      {slot.room} 
-                      {slot.availableTimeSlots.length > 0 
-                        ? ` (${slot.availableTimeSlots.length} slots available)` 
-                        : ' (No slots available)'}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Time Slot</InputLabel>
-                <Select
-                  value={selectedTimeSlot}
-                  label="Time Slot"
-                  onChange={(e) => setSelectedTimeSlot(e.target.value)}
-                  disabled={!selectedRoom}
-                >
-                  {selectedRoom && availableSlots
-                    .find(slot => slot.room === selectedRoom)
-                    ?.availableTimeSlots.map((timeSlot) => (
-                      <MenuItem key={timeSlot} value={timeSlot}>
-                        {timeSlot}
+                />
+              </LocalizationProvider>
+
+              {selectedDate && (
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Room</InputLabel>
+                  <Select
+                    value={selectedRoom}
+                    label="Room"
+                    onChange={handleRoomChange}
+                  >
+                    {availableSlots.map((slot) => (
+                      <MenuItem key={slot.room} value={slot.room}>
+                        {slot.room} 
                       </MenuItem>
                     ))}
-                </Select>
-              </FormControl>
+                  </Select>
+                </FormControl>
+              )}
+
+              {selectedRoom && (
+                <FormControl fullWidth>
+                  <InputLabel>Time Slot</InputLabel>
+                  <Select
+                    value={selectedTimeSlot}
+                    label="Time Slot"
+                    onChange={handleTimeSlotChange}
+                  >
+                    {selectedRoom && availableSlots
+                      .find(slot => slot.room === selectedRoom)
+                      ?.timeSlots.map((timeSlot) => (
+                        <MenuItem key={timeSlot} value={timeSlot}>
+                          {timeSlot}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              )}
             </Box>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
-            <Button onClick={() => setSlotSelectionOpen(false)}>
+            <Button onClick={handleCloseDialog}>
               Cancel
             </Button>
             <Button 
-              onClick={handleSlotSubmit} 
+              onClick={handleSubmit} 
               variant="contained" 
               startIcon={<ScheduleIcon />}
+              disabled={!selectedDate || !selectedRoom || !selectedTimeSlot}
             >
               Confirm Slot
             </Button>
