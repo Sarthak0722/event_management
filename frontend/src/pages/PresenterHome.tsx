@@ -38,7 +38,8 @@ import {
   Assignment as AssignmentIcon,
   Domain as DomainIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import PaperDetails from '../components/PaperDetails';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -46,6 +47,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { Paper, Presenter } from '../types/paper';
+import { Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 
 interface AvailableSlot {
   room: string;
@@ -57,6 +59,8 @@ const ALLOWED_DATES = [
   '2026-01-10',
   '2026-01-11'
 ];
+
+type SearchCriteria = 'default' | 'paperId' | 'title' | 'presenter';
 
 const PresenterHome = () => {
   const theme = useTheme();
@@ -75,10 +79,25 @@ const PresenterHome = () => {
   const [slotError, setSlotError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [scheduledPapers, setScheduledPapers] = useState<Paper[]>([]);
+  const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>('default');
+  const [expandedDomain, setExpandedDomain] = useState<string | false>(false);
+  const [expandedRooms, setExpandedRooms] = useState<{ [key: string]: boolean }>({});
+  const [showSchedule, setShowSchedule] = useState(false);
 
   useEffect(() => {
     fetchPresenterPapers();
   }, [user?.email]);
+
+  useEffect(() => {
+    // Check if any paper has a booked slot
+    const hasBookedSlot = papers.some(paper => paper.selectedSlot?.bookedBy);
+    setShowSchedule(hasBookedSlot);
+    
+    if (hasBookedSlot) {
+      fetchScheduledPapers();
+    }
+  }, [papers]);
 
   const fetchPresenterPapers = async () => {
     try {
@@ -97,6 +116,27 @@ const PresenterHome = () => {
       setError('Failed to load your papers. Please try again later.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchScheduledPapers = async () => {
+    try {
+      if (!papers[0]?.selectedSlot?.date) return;
+      
+      const response = await axios.get('/papers/by-date', {
+        params: { date: papers[0].selectedSlot.date }
+      });
+      
+      if (response.data.success) {
+        const papersByDomain = response.data.data as { [key: string]: Paper[] };
+        const allPapers: Paper[] = [];
+        Object.values(papersByDomain).forEach(papers => {
+          allPapers.push(...papers);
+        });
+        setScheduledPapers(allPapers);
+      }
+    } catch (error) {
+      console.error('Error fetching scheduled papers:', error);
     }
   };
 
@@ -158,9 +198,16 @@ const PresenterHome = () => {
     }
   };
 
-  const handleRoomChange = (event: SelectChangeEvent<string>) => {
+  const handleRoomSelectChange = (event: SelectChangeEvent<string>) => {
     setSelectedRoom(event.target.value);
     setSelectedTimeSlot('');
+  };
+
+  const handleAccordionRoomChange = (domainRoom: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpandedRooms(prev => ({
+      ...prev,
+      [domainRoom]: isExpanded
+    }));
   };
 
   const handleTimeSlotChange = (event: SelectChangeEvent<string>) => {
@@ -217,6 +264,61 @@ const PresenterHome = () => {
   const handleLogout = () => {
     logout();
   };
+
+  const handleDomainChange = (domain: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpandedDomain(isExpanded ? domain : false);
+  };
+
+  const filteredScheduledPapers = scheduledPapers.filter(paper => {
+    if (!showSchedule) return false;
+    
+    const searchTermLower = searchTerm.toLowerCase().trim();
+    
+    let matchesSearch = true;
+    if (searchTerm !== '') {
+      switch (searchCriteria) {
+        case 'paperId':
+          matchesSearch = paper.paperId.toLowerCase().includes(searchTermLower);
+          break;
+        case 'title':
+          matchesSearch = paper.title.toLowerCase().includes(searchTermLower);
+          break;
+        case 'presenter':
+          matchesSearch = paper.presenters.some(p => 
+            p.name.toLowerCase().includes(searchTermLower) ||
+            p.email.toLowerCase().includes(searchTermLower)
+          );
+          break;
+        default:
+          matchesSearch = 
+            paper.paperId.toLowerCase().includes(searchTermLower) ||
+            paper.title.toLowerCase().includes(searchTermLower) ||
+            paper.presenters.some(p => 
+              p.name.toLowerCase().includes(searchTermLower) ||
+              p.email.toLowerCase().includes(searchTermLower)
+            );
+      }
+    }
+    
+    return matchesSearch;
+  });
+
+  const groupedByDomain = filteredScheduledPapers.reduce((acc, paper) => {
+    if (!paper.selectedSlot) return acc;
+    
+    const { domain } = paper;
+    const room = paper.selectedSlot.room;
+    
+    if (!acc[domain]) {
+      acc[domain] = {};
+    }
+    if (!acc[domain][room]) {
+      acc[domain][room] = [];
+    }
+    
+    acc[domain][room].push(paper);
+    return acc;
+  }, {} as { [domain: string]: { [room: string]: Paper[] } });
 
   if (loading) {
     return (
@@ -429,6 +531,184 @@ const PresenterHome = () => {
           </Grid>
         )}
 
+        {showSchedule && (
+          <Box sx={{ mt: 6 }}>
+            <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+              Scheduled Presentations
+            </Typography>
+            
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} md={8}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel>Search By</InputLabel>
+                    <Select
+                      value={searchCriteria}
+                      label="Search By"
+                      onChange={(e) => setSearchCriteria(e.target.value as SearchCriteria)}
+                    >
+                      <MenuItem value="default">All Fields</MenuItem>
+                      <MenuItem value="paperId">Paper ID</MenuItem>
+                      <MenuItem value="title">Title</MenuItem>
+                      <MenuItem value="presenter">Presenter</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label={`Search by ${searchCriteria === 'default' ? 'all fields' : searchCriteria}`}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Box>
+              </Grid>
+            </Grid>
+
+            {Object.entries(groupedByDomain).map(([domain, rooms]) => (
+              <Accordion
+                key={domain}
+                expanded={expandedDomain === domain}
+                onChange={handleDomainChange(domain)}
+                sx={{
+                  mb: 2,
+                  '&:before': { display: 'none' },
+                  borderRadius: '8px !important',
+                  overflow: 'hidden',
+                  border: 1,
+                  borderColor: 'divider'
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    backgroundColor: theme.palette.primary.light,
+                    color: 'white',
+                    '& .MuiAccordionSummary-expandIconWrapper': {
+                      color: 'white'
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <DomainIcon sx={{ mr: 1 }} />
+                    <Typography variant="h6">
+                      {domain}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={`${Object.keys(rooms).length} Rooms`}
+                      sx={{ ml: 2, backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 0 }}>
+                  {Object.entries(rooms).map(([room, papers]) => (
+                    <Accordion
+                      key={`${domain}-${room}`}
+                      expanded={expandedRooms[`${domain}-${room}`] || false}
+                      onChange={(event, isExpanded) => handleAccordionRoomChange(`${domain}-${room}`)(event, isExpanded)}
+                      disableGutters
+                      sx={{
+                        '&:before': { display: 'none' },
+                        boxShadow: 'none',
+                        borderTop: 1,
+                        borderColor: 'divider',
+                        '&:first-of-type': {
+                          borderTop: 0
+                        }
+                      }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{
+                          backgroundColor: theme.palette.grey[50],
+                          '&:hover': {
+                            backgroundColor: theme.palette.grey[100]
+                          }
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <RoomIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+                          <Typography variant="subtitle1" color="primary">
+                            Room {room}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`${papers.length} Presentations`}
+                            sx={{ ml: 2 }}
+                          />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ p: 2 }}>
+                        <Grid container spacing={2}>
+                          {papers
+                            .sort((a, b) => 
+                              (a.selectedSlot?.timeSlot || '').localeCompare(b.selectedSlot?.timeSlot || '')
+                            )
+                            .map((paper) => (
+                              <Grid item xs={12} key={paper._id}>
+                                <Card elevation={0} sx={{ 
+                                  border: 1, 
+                                  borderColor: 'divider'
+                                }}>
+                                  <CardContent>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                      <Box>
+                                        <Typography variant="h6" gutterBottom>
+                                          {paper.title}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                          <Chip
+                                            size="small"
+                                            icon={<ScheduleIcon />}
+                                            label={paper.selectedSlot?.timeSlot}
+                                            color="primary"
+                                          />
+                                          <Chip
+                                            size="small"
+                                            icon={<PersonIcon />}
+                                            label={paper.presenters[0]?.name || 'No presenter'}
+                                          />
+                                          <Chip
+                                            size="small"
+                                            icon={<AssignmentIcon />}
+                                            label={`Paper ID: ${paper.paperId}`}
+                                            color="secondary"
+                                          />
+                                        </Box>
+                                      </Box>
+                                      <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={() => handleViewDetails(paper)}
+                                        startIcon={<EventIcon />}
+                                      >
+                                        View Details
+                                      </Button>
+                                    </Box>
+                                    <Typography variant="body2" color="textSecondary">
+                                      {paper.synopsis.substring(0, 150)}...
+                                    </Typography>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            ))}
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
+        )}
+
         <PaperDetails
           paper={selectedPaper}
           open={detailsOpen}
@@ -499,7 +779,7 @@ const PresenterHome = () => {
                   <Select
                     value={selectedRoom}
                     label="Room"
-                    onChange={handleRoomChange}
+                    onChange={handleRoomSelectChange}
                   >
                     {availableSlots.map((slot) => (
                       <MenuItem key={slot.room} value={slot.room}>
