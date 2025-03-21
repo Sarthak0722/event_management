@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const config = require('./config/config');
 const authRoutes = require('./routes/authRoutes');
-const paperRoutes = require('./routes/paperRoutes');
+const paperRoutes = require('./routes/papers');
 
 const app = express();
 
