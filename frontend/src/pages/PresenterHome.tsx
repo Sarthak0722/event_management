@@ -68,7 +68,6 @@ const PresenterHome = () => {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('All');
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -80,6 +79,7 @@ const PresenterHome = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [scheduledPapers, setScheduledPapers] = useState<Paper[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>('default');
   const [expandedDomain, setExpandedDomain] = useState<string | false>(false);
   const [expandedRooms, setExpandedRooms] = useState<{ [key: string]: boolean }>({});
@@ -138,22 +138,6 @@ const PresenterHome = () => {
     } catch (error) {
       console.error('Error fetching scheduled papers:', error);
     }
-  };
-
-  const handleSearch = () => {
-    if (!searchTerm.trim() && selectedDomain === 'All') {
-      fetchPresenterPapers();
-      return;
-    }
-
-    const searchTermLower = searchTerm.toLowerCase();
-    const filteredPapers = papers.filter(paper =>
-      (selectedDomain === 'All' || paper.domain === selectedDomain) &&
-      (paper.title.toLowerCase().includes(searchTermLower) ||
-      paper.synopsis.toLowerCase().includes(searchTermLower))
-    );
-
-    setPapers(filteredPapers);
   };
 
   const handleViewDetails = (paper: Paper) => {
@@ -275,7 +259,7 @@ const PresenterHome = () => {
     const searchTermLower = searchTerm.toLowerCase().trim();
     
     let matchesSearch = true;
-    if (searchTerm !== '') {
+    if (searchTermLower !== '') {
       switch (searchCriteria) {
         case 'paperId':
           matchesSearch = paper.paperId.toLowerCase().includes(searchTermLower);
@@ -359,46 +343,6 @@ const PresenterHome = () => {
           </Alert>
         )}
 
-        <MuiPaper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 2, border: 1, borderColor: 'divider' }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={8}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Search Papers"
-                variant="outlined"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Filter by Domain</InputLabel>
-                <Select
-                  value={selectedDomain}
-                  label="Filter by Domain"
-                  onChange={(e) => setSelectedDomain(e.target.value)}
-                >
-                  <MenuItem value="All">All Domains</MenuItem>
-                  {Array.from(new Set(papers.map(p => p.domain))).map((domain) => (
-                    <MenuItem key={domain} value={domain}>
-                      {domain}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        </MuiPaper>
-
         {papers.length === 0 ? (
           <MuiPaper 
             elevation={0} 
@@ -414,7 +358,7 @@ const PresenterHome = () => {
               No Papers Found
             </Typography>
             <Typography color="textSecondary">
-              You haven't submitted any papers yet or your search returned no results.
+              You haven't submitted any papers yet.
             </Typography>
           </MuiPaper>
         ) : (
@@ -734,27 +678,6 @@ const PresenterHome = () => {
               <Alert severity="error" sx={{ mb: 2 }}>
                 {slotError}
               </Alert>
-            )}
-            {selectedPaper && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Domain Information
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Chip
-                    size="small"
-                    icon={<AssignmentIcon />}
-                    label={`Total Papers: ${availableSlots[0]?.timeSlots.length || 0}`}
-                    variant="outlined"
-                  />
-                  <Chip
-                    size="small"
-                    icon={<RoomIcon />}
-                    label={`Rooms Needed: ${availableSlots[0]?.timeSlots.length || 0}`}
-                    variant="outlined"
-                  />
-                </Box>
-              </Box>
             )}
             <Box sx={{ mt: 2 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
