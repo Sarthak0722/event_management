@@ -17,8 +17,8 @@ exports.register = async (req, res) => {
 
         // Validate required fields
         if (!username || !email || !password || !role) {
-            console.log('Missing required fields:', { username: !!username, email: !!email, password: !!password, role: !!role });
             return res.status(400).json({
+                success: false,
                 message: 'Please provide all required fields'
             });
         }
@@ -26,6 +26,7 @@ exports.register = async (req, res) => {
         // Check if role is valid (only presenter or attendee can register)
         if (role === 'admin') {
             return res.status(400).json({
+                success: false,
                 message: 'Cannot register as admin'
             });
         }
@@ -34,6 +35,7 @@ exports.register = async (req, res) => {
         const emailExists = await User.findOne({ email });
         if (emailExists) {
             return res.status(400).json({
+                success: false,
                 message: 'Email already exists'
             });
         }
@@ -42,6 +44,7 @@ exports.register = async (req, res) => {
         const usernameExists = await User.findOne({ username });
         if (usernameExists) {
             return res.status(400).json({
+                success: false,
                 message: 'Username already exists'
             });
         }
@@ -65,22 +68,24 @@ exports.register = async (req, res) => {
         res.cookie('jwt', token, {
             expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production'
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
         });
 
         // Remove password from output
         user.password = undefined;
 
         res.status(201).json({
-            status: 'success',
-            token,
+            success: true,
             data: {
-                user
+                user,
+                token
             }
         });
     } catch (error) {
         console.error('Registration error:', error);
         res.status(400).json({
+            success: false,
             message: error.message
         });
     }
@@ -93,6 +98,7 @@ exports.login = async (req, res) => {
         // Check if email and password exist
         if (!email || !password) {
             return res.status(400).json({
+                success: false,
                 message: 'Please provide email and password'
             });
         }
@@ -101,6 +107,7 @@ exports.login = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user || !(await user.comparePassword(password))) {
             return res.status(401).json({
+                success: false,
                 message: 'Incorrect email or password'
             });
         }
@@ -112,21 +119,23 @@ exports.login = async (req, res) => {
         res.cookie('jwt', token, {
             expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production'
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
         });
 
         // Remove password from output
         user.password = undefined;
 
         res.status(200).json({
-            status: 'success',
-            token,
+            success: true,
             data: {
-                user
+                user,
+                token
             }
         });
     } catch (error) {
         res.status(400).json({
+            success: false,
             message: error.message
         });
     }
@@ -135,9 +144,11 @@ exports.login = async (req, res) => {
 exports.logout = (req, res) => {
     res.cookie('jwt', 'loggedout', {
         expires: new Date(Date.now() + 10 * 1000),
-        httpOnly: true
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     });
-    res.status(200).json({ status: 'success' });
+    res.status(200).json({ success: true });
 };
 
 exports.me = async (req, res) => {

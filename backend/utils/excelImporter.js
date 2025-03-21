@@ -1,5 +1,6 @@
 const xlsx = require('xlsx');
 const Paper = require('../models/Paper');
+const mongoose = require('mongoose');
 
 const TIME_SLOTS = [
   '09:00 - 09:30', '09:30 - 10:00', '10:00 - 10:30', '10:30 - 11:00',
@@ -34,17 +35,38 @@ const generateTeamId = (domain, index) => {
   return `${domainCode}${String(index + 1).padStart(3, '0')}`;
 };
 
-const isDuplicateTitle = (title, existingPapers, newPapers) => {
-  return [...existingPapers, ...newPapers].some(
-    p => p.title.toLowerCase() === title.toLowerCase()
-  );
-};
+// Check if a paper is a duplicate (same title and exact same presenters)
+const isDuplicate = (title, presenters, newPapers) => {
+  console.log(`Checking for duplicates for paper: ${title}`);
+  console.log(`Number of papers in current batch: ${newPapers.length}`);
 
-const isDuplicatePresenter = (email, existingPapers, newPapers, currentPaper) => {
-  return [...existingPapers, ...newPapers].some(paper => {
-    if (paper === currentPaper) return false;
-    return paper.presenters.some(presenter => presenter.email.toLowerCase() === email.toLowerCase());
-  });
+  for (const paper of newPapers) {
+    // First check if title matches (case-insensitive)
+    const titleMatches = paper.title.toLowerCase() === title.toLowerCase();
+    if (!titleMatches) {
+      continue;
+    }
+
+    console.log(`Found title match: ${paper.title}`);
+    
+    // Then check if ALL presenter emails match (case-insensitive)
+    const newEmails = presenters.map(p => p.email.toLowerCase()).sort();
+    const existingEmails = paper.presenters.map(p => p.email.toLowerCase()).sort();
+    
+    console.log('New presenter emails:', newEmails);
+    console.log('Existing presenter emails:', existingEmails);
+
+    // Check if arrays have same length and all elements match
+    const emailsMatch = newEmails.length === existingEmails.length &&
+      newEmails.every((email, index) => email === existingEmails[index]);
+    
+    if (emailsMatch) {
+      console.log('Found exact presenter match');
+      return true;
+    }
+  }
+
+  return false;
 };
 
 const processExcelData = async (filePath) => {
@@ -55,26 +77,22 @@ const processExcelData = async (filePath) => {
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
 
-    // Get existing papers from database
-    const existingPapers = await Paper.find();
+    console.log('Excel file structure:');
+    console.log('Sheet name:', sheetName);
+    console.log('First row columns:', Object.keys(data[0]));
+    console.log('First row data:', JSON.stringify(data[0], null, 2));
+
     const newPapers = [];
     const duplicates = [];
     const errors = [];
 
     // Process each row
-    data.forEach((row, index) => {
+    for (const [index, row] of data.entries()) {
       try {
-        if (!row.Domain || !row['Abstract Title']) {
-          throw new Error(`Row ${index + 1}: Domain and Abstract Title are required`);
-        }
+        console.log(`\nProcessing row ${index + 1}:`, JSON.stringify(row, null, 2));
 
-        // Check for duplicate title
-        if (isDuplicateTitle(row['Abstract Title'], existingPapers, newPapers)) {
-          duplicates.push({
-            title: row['Abstract Title'],
-            reason: 'Duplicate title'
-          });
-          return;
+        if (!row.Domain || !row.Title || !row.Synopsis) {
+          throw new Error(`Row ${index + 1}: Domain, Title, and Synopsis are required`);
         }
 
         // Process presenter information
@@ -90,27 +108,26 @@ const processExcelData = async (filePath) => {
         const presenters = presenterNames.map((name, idx) => ({
           name: name,
           email: emails[idx] || '',
-          contact: contacts[idx] || ''
+          phone: contacts[idx] || ''
         }));
 
-        // Check for duplicate presenters
-        const duplicatePresenterEmail = presenters.find(presenter => 
-          isDuplicatePresenter(presenter.email, existingPapers, newPapers, null)
-        );
+        console.log('Presenters:', JSON.stringify(presenters, null, 2));
 
-        if (duplicatePresenterEmail) {
+        // Check for duplicates (same title and exact same presenters)
+        if (isDuplicate(row.Title, presenters, newPapers)) {
+          console.log('Found duplicate:', row.Title);
           duplicates.push({
-            title: row['Abstract Title'],
-            reason: `Presenter with email ${duplicatePresenterEmail.email} is already presenting another paper`
+            title: row.Title,
+            reason: 'Paper with same title and exact same presenters already exists in this import batch'
           });
-          return;
+          continue;
         }
 
         const paper = new Paper({
           domain: row.Domain,
-          title: row['Abstract Title'],
+          title: row.Title,
           presenters: presenters,
-          synopsis: row.Synopsis || '',
+          synopsis: row.Synopsis,
           teamId: generateTeamId(row.Domain, index),
           selectedSlot: {
             date: null,
@@ -119,11 +136,13 @@ const processExcelData = async (filePath) => {
           }
         });
 
+        console.log('Created paper:', JSON.stringify(paper, null, 2));
         newPapers.push(paper);
       } catch (error) {
+        console.error('Error processing row:', error);
         errors.push(error.message);
       }
-    });
+    }
 
     if (errors.length > 0) {
       return {
@@ -143,7 +162,9 @@ const processExcelData = async (filePath) => {
     }
 
     // Save to database
+    console.log(`Saving ${newPapers.length} papers to database...`);
     await Paper.insertMany(newPapers);
+    console.log('Papers saved successfully');
 
     return {
       success: true,

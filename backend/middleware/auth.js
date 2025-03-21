@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+require('dotenv').config();
 
-const JWT_SECRET = 'your-secret-key'; // In production, this should be in environment variables
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 exports.protect = async (req, res, next) => {
     try {

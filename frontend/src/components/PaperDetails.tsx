@@ -10,11 +10,10 @@ import {
   Chip,
   Divider,
   Grid,
-  Paper,
+  Paper as MuiPaper,
   Accordion,
   AccordionSummary,
-  AccordionDetails,
-  useTheme
+  AccordionDetails
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -25,36 +24,11 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   Domain as DomainIcon,
-  Assignment as AssignmentIcon,
   ExpandMore as ExpandMoreIcon,
   Description as DescriptionIcon
 } from '@mui/icons-material';
-
-interface Presenter {
-  name: string;
-  email: string;
-  contact?: string;
-  hasSelectedSlot: boolean;
-}
-
-interface Paper {
-  _id: string;
-  title: string;
-  domain: string;
-  presenters: Presenter[];
-  synopsis: string;
-  teamId: string;
-  room: number | null;
-  timeSlot: string | null;
-  day: number | null;
-  isSlotAllocated: boolean;
-  selectedSlot?: {
-    date: string;
-    room: string;
-    timeSlot: string;
-    bookedBy: string;
-  };
-}
+import { useTheme } from '@mui/material/styles';
+import { Paper } from '../types/paper';
 
 interface PaperDetailsProps {
   paper: Paper | null;
@@ -112,57 +86,54 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
                 label={paper.domain}
                 color="primary"
               />
-              <Chip
-                size="small"
-                icon={<AssignmentIcon />}
-                label={`ID: ${paper.teamId}`}
-              />
             </Box>
           </Grid>
 
-          <Grid item xs={12}>
-            <Accordion 
-              expanded={expandedSection === 'schedule'} 
-              onChange={handleChange('schedule')}
-              sx={{ '&:before': { display: 'none' } }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  backgroundColor: theme.palette.primary.main,
-                  color: 'white',
-                  borderRadius: '4px 4px 0 0',
-                  '&.Mui-expanded': {
-                    borderRadius: '4px 4px 0 0',
-                  }
-                }}
+          {paper.selectedSlot && (
+            <Grid item xs={12}>
+              <Accordion 
+                expanded={expandedSection === 'schedule'} 
+                onChange={handleChange('schedule')}
+                sx={{ '&:before': { display: 'none' } }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <ScheduleIcon sx={{ mr: 1 }} />
-                  <Typography variant="subtitle1">Schedule Information</Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Chip
-                    icon={<RoomIcon />}
-                    label={paper.room ? `Room ${paper.room}` : 'Room not assigned'}
-                    variant="outlined"
-                  />
-                  <Chip
-                    icon={<ScheduleIcon />}
-                    label={paper.timeSlot || 'Time slot not assigned'}
-                    variant="outlined"
-                  />
-                  <Chip
-                    icon={<EventIcon />}
-                    label={paper.day ? `Day ${paper.day}` : 'Day not assigned'}
-                    variant="outlined"
-                  />
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-          </Grid>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    backgroundColor: theme.palette.primary.main,
+                    color: 'white',
+                    borderRadius: '4px 4px 0 0',
+                    '&.Mui-expanded': {
+                      borderRadius: '4px 4px 0 0',
+                    }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <ScheduleIcon sx={{ mr: 1 }} />
+                    <Typography variant="subtitle1">Schedule Information</Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Chip
+                      icon={<RoomIcon />}
+                      label={`Room ${paper.selectedSlot.room}`}
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<ScheduleIcon />}
+                      label={paper.selectedSlot.timeSlot}
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<EventIcon />}
+                      label={new Date(paper.selectedSlot.date).toLocaleDateString()}
+                      variant="outlined"
+                    />
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            </Grid>
+          )}
 
           <Grid item xs={12}>
             <Accordion 
@@ -220,7 +191,7 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
                 <Grid container spacing={2}>
                   {paper.presenters.map((presenter, index) => (
                     <Grid item xs={12} key={index}>
-                      <Paper 
+                      <MuiPaper 
                         variant="outlined" 
                         sx={{ 
                           p: 2,
@@ -239,16 +210,14 @@ const PaperDetails: React.FC<PaperDetailsProps> = ({ paper, open, onClose }) => 
                             label={presenter.email}
                             variant="outlined"
                           />
-                          {presenter.contact && (
-                            <Chip
-                              size="small"
-                              icon={<PhoneIcon />}
-                              label={presenter.contact}
-                              variant="outlined"
-                            />
-                          )}
+                          <Chip
+                            size="small"
+                            icon={<PhoneIcon />}
+                            label={presenter.phone}
+                            variant="outlined"
+                          />
                         </Box>
-                      </Paper>
+                      </MuiPaper>
                     </Grid>
                   ))}
                 </Grid>

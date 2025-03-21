@@ -1,29 +1,26 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import AdminHome from './pages/AdminHome';
 import PresenterHome from './pages/PresenterHome';
 import AttendeeHome from './pages/AttendeeHome';
-import { AuthProvider } from './context/AuthContext';
+import AdminHome from './pages/AdminHome';
 import PrivateRoute from './components/PrivateRoute';
+import { AuthProvider } from './context/AuthContext';
 
-function App() {
+const theme = createTheme();
+
+const App: React.FC = () => {
   return (
-    <Router>
-      <AuthProvider>
-        <div className="App">
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route
-              path="/admin"
-              element={
-                <PrivateRoute role="admin">
-                  <AdminHome />
-                </PrivateRoute>
-              }
-            />
             <Route
               path="/presenter"
               element={
@@ -40,12 +37,20 @@ function App() {
                 </PrivateRoute>
               }
             />
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route
+              path="/admin"
+              element={
+                <PrivateRoute role="admin">
+                  <AdminHome />
+                </PrivateRoute>
+              }
+            />
+            <Route path="/" element={<Login />} />
           </Routes>
-        </div>
-      </AuthProvider>
-    </Router>
+        </AuthProvider>
+      </Router>
+    </ThemeProvider>
   );
-}
+};
 
 export default App;

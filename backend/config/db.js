@@ -1,13 +1,24 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Paper = require('../models/Paper');
+require('dotenv').config();
+
+const MONGODB_URI = 'mongodb+srv://dbUser:GwWt9zrVEgItoOjU@cluster0.j3lma.mongodb.net/conference-app?retryWrites=true&w=majority&appName=Cluster0';
+
+let isConnected = false;
 
 const connectWithRetry = async () => {
+    if (isConnected) {
+        console.log('Using existing database connection');
+        return;
+    }
+
     try {
-        await mongoose.connect('mongodb+srv://dbUser:GwWt9zrVEgItoOjU@cluster0.j3lma.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+        await mongoose.connect(MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });
+        isConnected = true;
         console.log('Connected to MongoDB');
         
         // Ensure indexes are created for User model
@@ -25,6 +36,7 @@ const connectWithRetry = async () => {
     } catch (err) {
         console.error('MongoDB connection error:', err);
         console.log('Retrying in 5 seconds...');
+        isConnected = false;
         setTimeout(connectWithRetry, 5000);
     }
 };

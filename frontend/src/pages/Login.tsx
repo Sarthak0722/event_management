@@ -29,18 +29,31 @@ const Login = () => {
 
     try {
       const userData = await login(email, password);
-      setSuccess(true);
-      
-      // Handle navigation here to ensure better control
-      setTimeout(() => {
-        if (userData) {
-          navigate(`/${userData.role.toLowerCase()}`);
-        } else {
-          navigate('/attendee'); // Default fallback
-        }
-      }, 1000);
+      if (userData && userData.role) {
+        setSuccess(true);
+        // Ensure we have the role before redirecting
+        const role = userData.role.toLowerCase();
+        // Add a small delay to show the success message
+        setTimeout(() => {
+          switch (role) {
+            case 'admin':
+              navigate('/admin');
+              break;
+            case 'presenter':
+              navigate('/presenter');
+              break;
+            case 'attendee':
+              navigate('/attendee');
+              break;
+            default:
+              setError('Invalid user role');
+          }
+        }, 1000);
+      } else {
+        setError('Login failed: Invalid response from server');
+      }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }

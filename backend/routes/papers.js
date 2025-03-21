@@ -162,9 +162,16 @@ router.get('/by-date', async (req, res) => {
 });
 
 // Get papers for a specific presenter
-router.get('/presenter/:email', async (req, res) => {
+router.get('/presenter', async (req, res) => {
   try {
-    const { email } = req.params;
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
     const papers = await Paper.find({
       'presenters.email': email
     });
@@ -174,6 +181,7 @@ router.get('/presenter/:email', async (req, res) => {
       data: papers
     });
   } catch (error) {
+    console.error('Error fetching presenter papers:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

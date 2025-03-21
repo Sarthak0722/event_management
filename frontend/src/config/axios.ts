@@ -1,29 +1,29 @@
 import axios from 'axios';
 
-// Configure axios defaults
-axios.defaults.baseURL = 'http://localhost:5000';
-axios.defaults.withCredentials = true;
+const instance = axios.create({
+    baseURL: 'http://localhost:5000/api',
+    withCredentials: true,
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    timeout: 10000 // 10 second timeout
+});
 
-// Add request interceptor
-axios.interceptors.request.use(
-  (config) => {
-    // You can add any request modifications here
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
+// Add a response interceptor to handle errors
+instance.interceptors.response.use(
+    response => response,
+    error => {
+        if (axios.isCancel(error)) {
+            console.log('Request cancelled:', error.message);
+            return;
+        }
+
+        // Handle 401 (Unauthorized) errors by redirecting to login
+        if (error.response && error.response.status === 401) {
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
 );
 
-// Add response interceptor
-axios.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    console.error('API Error:', error);
-    return Promise.reject(error);
-  }
-);
-
-export default axios; 
+export default instance; 

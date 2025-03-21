@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Box, CircularProgress } from '@mui/material';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -11,25 +12,26 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, role }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh'
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
   if (user.role !== role) {
-    // Redirect to appropriate home page based on role
-    switch (user.role) {
-      case 'admin':
-        return <Navigate to="/admin" />;
-      case 'presenter':
-        return <Navigate to="/presenter" />;
-      case 'attendee':
-        return <Navigate to="/attendee" />;
-      default:
-        return <Navigate to="/login" />;
-    }
+    return <Navigate to={`/${user.role.toLowerCase()}`} replace />;
   }
 
   return <>{children}</>;

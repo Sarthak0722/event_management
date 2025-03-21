@@ -14,7 +14,10 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: 'http://localhost:3000',
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Set-Cookie']
 }));
 app.use(cookieParser());
 
@@ -22,18 +25,22 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/papers', paperRoutes);
 
-// Start server only after database connection
-const startServer = async () => {
-    try {
-        await connectWithRetry();
-        const PORT = process.env.PORT || 5000;
-        app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-};
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+    });
+});
 
-startServer(); 
+const PORT = process.env.PORT || 5000;
+
+// Connect to MongoDB and start server
+connectWithRetry().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}).catch(err => {
+    console.error('Failed to start server:', err);
+}); 

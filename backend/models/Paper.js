@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
 
 const paperSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
-    unique: true
-  },
   domain: {
+    type: String,
+    required: true
+  },
+  title: {
     type: String,
     required: true
   },
@@ -19,13 +18,12 @@ const paperSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    contact: String
+    phone: {
+      type: String,
+      required: true
+    }
   }],
   synopsis: {
-    type: String,
-    default: ''
-  },
-  teamId: {
     type: String,
     required: true
   },

@@ -1,6 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import axios, { CancelTokenSource } from 'axios';
+import axiosInstance from '../config/axios';
 
 export interface User {
   _id: string;
@@ -18,14 +19,16 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({
+const defaultContext: AuthContextType = {
   user: null,
   login: async () => null,
   register: async () => {},
   logout: async () => {},
   isAuthenticated: false,
-  loading: false
-});
+  loading: true
+};
+
+const AuthContext = createContext<AuthContextType>(defaultContext);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -38,79 +41,133 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const cancelTokenRef = useRef<CancelTokenSource | null>(null);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/api/auth/me', { withCredentials: true });
-        if (response.data.success) {
-          setUser(response.data.data.user);
-          // Redirect to appropriate page if on login or register
-          const path = window.location.pathname;
-          if (path === '/login' || path === '/register' || path === '/') {
-            navigate(`/${response.data.data.user.role.toLowerCase()}`);
-          }
-        }
-      } catch (error) {
-        setUser(null);
-        // Only redirect to login if not already there
-        const path = window.location.pathname;
-        if (path !== '/login' && path !== '/register') {
-          navigate('/login');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+  const checkAuth = useCallback(async () => {
+    if (authChecked) return; // Skip if we've already checked auth
 
-    checkAuth();
-  }, [navigate]);
+    // Cancel any previous request
+    if (cancelTokenRef.current) {
+      cancelTokenRef.current.cancel('Operation canceled due to new request.');
+    }
 
-  const login = async (email: string, password: string) => {
+    // Create a new cancel token
+    cancelTokenRef.current = axios.CancelToken.source();
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        email,
-        password
-      }, { withCredentials: true });
+      const response = await axiosInstance.get('/auth/me', {
+        cancelToken: cancelTokenRef.current.token
+      });
       
       if (response.data.success) {
         const userData = response.data.data.user;
         setUser(userData);
-        // Let the Login component handle navigation
+        
+        // Only redirect if we're on the login/register/root page and have a valid user
+        if (['/login', '/register', '/'].includes(location.pathname) && userData.role) {
+          navigate(`/${userData.role.toLowerCase()}`, { replace: true });
+        }
+      } else {
+        setUser(null);
+        if (!['/login', '/register'].includes(location.pathname)) {
+          navigate('/login', { replace: true });
+        }
+      }
+    } catch (error) {
+      if (!axios.isCancel(error)) {
+        console.error('Auth check error:', error);
+        setUser(null);
+        if (!['/login', '/register'].includes(location.pathname)) {
+          navigate('/login', { replace: true });
+        }
+      }
+    } finally {
+      setLoading(false);
+      setAuthChecked(true);
+    }
+  }, [navigate, location.pathname, authChecked]);
+
+  useEffect(() => {
+    checkAuth();
+
+    // Cleanup function to cancel pending requests
+    return () => {
+      if (cancelTokenRef.current) {
+        cancelTokenRef.current.cancel('Component unmounted');
+      }
+    };
+  }, [checkAuth]);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const response = await axiosInstance.post('/auth/login', {
+        email,
+        password
+      });
+      
+      if (response.data.success) {
+        const userData = response.data.data.user;
+        setUser(userData);
+        navigate(`/${userData.role.toLowerCase()}`, { replace: true });
         return userData;
+      } else {
+        throw new Error(response.data.message || 'Login failed');
+      }
+    } catch (error: any) {
+      if (!axios.isCancel(error)) {
+        console.error('Login error:', error);
+        throw new Error(error.response?.data?.message || 'Login failed');
       }
       return null;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Login failed');
+    } finally {
+      setLoading(false);
     }
   };
 
   const register = async (username: string, email: string, password: string, role: 'presenter' | 'attendee') => {
+    setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      const response = await axiosInstance.post('/auth/register', {
         username,
         email,
         password,
         role
-      }, { withCredentials: true });
+      });
       
       if (response.data.success) {
-        setUser(response.data.data.user);
-        navigate(`/${response.data.data.user.role.toLowerCase()}`);
+        const userData = response.data.data.user;
+        setUser(userData);
+        navigate(`/${userData.role.toLowerCase()}`, { replace: true });
+      } else {
+        throw new Error(response.data.message || 'Registration failed');
       }
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Registration failed');
+      if (!axios.isCancel(error)) {
+        console.error('Registration error:', error);
+        throw new Error(error.response?.data?.message || 'Registration failed');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
+    setLoading(true);
     try {
-      await axios.post('http://localhost:5000/api/auth/logout', {}, { withCredentials: true });
+      await axiosInstance.post('/auth/logout');
       setUser(null);
-      navigate('/login');
+      setAuthChecked(false); // Reset auth check on logout
+      navigate('/login', { replace: true });
     } catch (error) {
-      console.error('Logout failed:', error);
+      if (!axios.isCancel(error)) {
+        console.error('Logout failed:', error);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -123,9 +180,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isAuthenticated: !!user
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}; 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export default AuthProvider; 

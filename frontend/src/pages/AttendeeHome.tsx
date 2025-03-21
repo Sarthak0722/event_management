@@ -116,7 +116,7 @@ const AttendeeHome = () => {
       setLoading(true);
       setError(null);
       const formattedDate = format(date, 'yyyy-MM-dd');
-      const response = await axios.get<ApiResponse>('/api/papers/by-date', {
+      const response = await axios.get<ApiResponse>('/papers/by-date', {
         params: { date: formattedDate }
       });
       
