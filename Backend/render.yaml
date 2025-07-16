@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: conference-management-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 18.17.1
+        value: production
+      - key: NODE_VERSION
+        value: 18.17.1 
